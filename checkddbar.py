@@ -16,6 +16,9 @@ import time
 #debug = True
 debug = False
 
+real_data = True
+#real_data = False
+
 #plots = True
 plots = False
 
@@ -35,13 +38,23 @@ if (debug):
     dframe = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco4_6_0.65.pkl.lz4", "rb"))
 
 else:
-    dfreco0 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco1_2_0.75.pkl.lz4", "rb"))
-    dfreco1 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco2_4_0.75.pkl.lz4", "rb"))
-    dfreco2 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco4_6_0.65.pkl.lz4", "rb"))
-    dfreco3 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco6_8_0.65.pkl.lz4", "rb"))
-    dfreco4 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco8_24_0.45.pkl.lz4", "rb"))
-    frames = [dfreco0, dfreco1, dfreco2, dfreco3, dfreco4]
-    dframe = pd.concat(frames)
+   if (real_data):
+        dfreco0 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco1_2_0.75.pkl.lz4", "rb"))
+        dfreco1 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco2_4_0.75.pkl.lz4", "rb"))
+        dfreco2 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco4_6_0.65.pkl.lz4", "rb"))
+        dfreco3 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco6_8_0.65.pkl.lz4", "rb"))
+        dfreco4 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_data/260_20191004-0008/skpkldecmerged/AnalysisResultsReco8_24_0.45.pkl.lz4", "rb"))
+        frames = [dfreco0, dfreco1, dfreco2, dfreco3, dfreco4]
+        dframe = pd.concat(frames)
+
+   else:
+        dfreco0 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand1_2.pkl.lz4", "rb"))
+        dfreco1 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand2_4.pkl.lz4", "rb"))
+        dfreco2 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand4_6.pkl.lz4", "rb"))
+        dfreco3 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand6_8.pkl.lz4", "rb"))
+        dfreco4 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand8_24.pkl.lz4", "rb"))
+        frames = [dfreco0, dfreco1, dfreco2, dfreco3, dfreco4]
+        dframe = pd.concat(frames)
 
 #dframe = dframe.query("y_test_probxgboost>0.5")
 #dframe = dframe.query("pt_cand > 10")
@@ -349,19 +362,37 @@ def filter_max_2(df):
 #    df["inv_cand_max"] = 0.
 #    df["phi_cand_max"] = 0.
 #    df["eta_cand_max"] = 0.
-    grouped = df.groupby(["run_number", "ev_id"])
-    for name, group in grouped:
+    def max_el(group):
         df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
         df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
         df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
         df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
-    pt_max = grouped["pt_cand"].idxmax()
+        return df
+    grouped = df.groupby(["run_number", "ev_id"]).apply(max_el)
     df = df[df["delta_phi"] > 0]
     return df
+
+#def filter_max_2(df):
+#    df = df.groupby(["run_number", "ev_id"], sort=True).filter(lambda x:
+#            len(x) > 1)
+##    df["pt_cand_max"] = 0.
+##    df["inv_cand_max"] = 0.
+##    df["phi_cand_max"] = 0.
+##    df["eta_cand_max"] = 0.
+#    grouped = df.groupby(["run_number", "ev_id"])
+#    for name, group in grouped:
+#        df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
+#        df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
+#        df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
+#        df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
+#    pt_max = grouped["pt_cand"].idxmax()
+#    df = df[df["delta_phi"] > 0]
+#    return df
 
 
 start = time.time()
 new_df_max_a = parallelize_df(new_df_total_a, filter_max_2)
+print(new_df_max_a)
 new_df_max_b = parallelize_df(new_df_total_b, filter_max_2)
 #new_df_max = filter_max_2(new_df_total)
 end = time.time()
