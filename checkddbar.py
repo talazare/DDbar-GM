@@ -220,7 +220,7 @@ def filter_phi(df):
         delta_phi = np.abs(phi_max - group["phi_cand"])
         delta_phi_all.extend(delta_phi)
     df["delta_phi"] = delta_phi_all
-    print(df.shape)
+    print(df.shape) #returns ~(350, 75)
 
     # max_el function returns me amount of the rows, that is ~300 times bigger
     # than it was before.
@@ -231,10 +231,10 @@ def filter_phi(df):
         df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
         df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
         df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
-        print("this!", df.shape) # normal df shape
+        print("this!", df.shape) # normal df shape (350, 79)
         return df
     df = df.groupby(["run_number", "ev_id"], sort = True).apply(max_el)
-    print(df.shape) #big df shape
+    print(df.shape) #big df shape ~(110000, 79)
     return df
 
 start = time.time()
