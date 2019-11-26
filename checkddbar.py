@@ -239,12 +239,14 @@ start = time.time()
 filtrated_phi_0 = parallelize_df(dfreco, filter_phi)
 print(filtrated_phi_0)
 
+#problem with filtrated phi!!
+
+
 end2 = time.time()
 
 print("paralellized calculations are done in", end2 - start, "sec")
 
-# so far everything is perfect
-
+input()
 filtrated_phi = filtrated_phi_0[filtrated_phi_0["delta_phi"] > 0]
 
 h_d_phi_cand = TH1F("delta phi cand" , "", 200, 0.1, 6)
