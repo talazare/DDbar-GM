@@ -224,14 +224,17 @@ def filter_phi(df):
 
     # max_el function returns me amount of the rows, that is ~300 times bigger
     # than it was before.
+    # guess: return df affects bad (concate all df for each group). return group gives 0. in the previous
+    # version worked fine. why?
     def max_el(group):
         df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
         df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
         df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
         df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
+        print("this!", df.shape) # normal df shape
         return df
     df = df.groupby(["run_number", "ev_id"], sort = True).apply(max_el)
-    print(df.shape)
+    print(df.shape) #big df shape
     return df
 
 start = time.time()
