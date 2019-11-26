@@ -4,7 +4,7 @@ import pickle
 import multiprocessing as mp
 import matplotlib.pyplot as plt
 
-from ROOT import TH1F, TH2F, TF1, TCanvas
+from ROOT import TH1F, TH2F, TH3F, TF1, TCanvas
 from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
 from root_numpy import fill_hist
 from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar, openfile
@@ -13,8 +13,8 @@ from multiprocessing import Pool, cpu_count
 import lz4.frame
 import time
 
-#debug = True
-debug = False
+debug = True
+#debug = False
 
 real_data = True
 #real_data = False
@@ -48,11 +48,11 @@ else:
         dframe = pd.concat(frames)
 
    else:
-        dfreco0 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand1_2.pkl.lz4", "rb"))
-        dfreco1 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand2_4.pkl.lz4", "rb"))
-        dfreco2 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand4_6.pkl.lz4", "rb"))
-        dfreco3 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand6_8.pkl.lz4", "rb"))
-        dfreco4 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsGen_pt_cand8_24.pkl.lz4", "rb"))
+        dfreco0 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsReco1_2_0.75.pkl.lz4", "rb"))
+        dfreco1 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsRecoi2_4_0.75.pkl.lz4", "rb"))
+        dfreco2 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsReco4_6_0.65.pkl.lz4", "rb"))
+        dfreco3 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsReco6_8_0.65.pkl.lz4", "rb"))
+        dfreco4 = pickle.load(openfile("/data/Derived/D0kINT7HighMultwithJets/vAN-20191003_ROOT6-1/pp_2018_mc_prodD2H/261_20191004-0007/skpkldecmerged/AnalysisResultsReco8_24_0.45.pkl.lz4", "rb"))
         frames = [dfreco0, dfreco1, dfreco2, dfreco3, dfreco4]
         dframe = pd.concat(frames)
 
@@ -66,7 +66,7 @@ print("Data loaded in", end - start, "sec")
 
 if(debug):
     print("Debug mode: reduced data")
-    dfreco = dfreco[:200000]
+    dfreco = dfreco[:20000]
 print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
@@ -220,22 +220,34 @@ def filter_phi(df):
         delta_phi = np.abs(phi_max - group["phi_cand"])
         delta_phi_all.extend(delta_phi)
     df["delta_phi"] = delta_phi_all
+    print(df.shape)
+
+    # max_el function returns me amount of the rows, that is ~300 times bigger
+    # than it was before.
+    def max_el(group):
+        df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
+        df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
+        df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
+        df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
+        return df
+    df = df.groupby(["run_number", "ev_id"], sort = True).apply(max_el)
+    print(df.shape)
     return df
 
 start = time.time()
 
 filtrated_phi_0 = parallelize_df(dfreco, filter_phi)
+print(filtrated_phi_0)
 
 end2 = time.time()
 
-print("paralellized calculations of delta phi is done in", end2 - start, "sec")
+print("paralellized calculations are done in", end2 - start, "sec")
 
 # so far everything is perfect
 
 filtrated_phi = filtrated_phi_0[filtrated_phi_0["delta_phi"] > 0]
 
-h_d_phi_cand = TH1F("delta phi cand" , "", 200, filtrated_phi.delta_phi.min(),
-        filtrated_phi.delta_phi.max())
+h_d_phi_cand = TH1F("delta phi cand" , "", 200, 0.1, 6)
 fill_hist(h_d_phi_cand, filtrated_phi["delta_phi"])
 cYields.SetLogy(True)
 h_d_phi_cand.Draw()
@@ -335,108 +347,62 @@ filtrated_phi_b = pd.concat(frames)
 filtrated_phi_a = filtrated_phi[filtrated_phi["delta_phi"] > a_cut_lower]
 filtrated_phi_a = filtrated_phi_a[filtrated_phi_a["delta_phi"] < a_cut_upper]
 
-#so far it's fine
-
-def filter_max(df):
-    grouped = df.groupby(["run_number", "ev_id"])
-    pt_max = grouped["pt_cand"].idxmax()
-    df = df.loc[pt_max, ]
-    return df
-
-start = time.time()
-df_max = parallelize_df(filtrated_phi_0, filter_max)
-end = time.time()
-print("creating dataframe contains only pt_max lines:", end - start, "sec")
-
-frames_a = [filtrated_phi_a, df_max]
-new_df_total_a = pd.concat(frames_a)
-new_df_total_a = new_df_total_a.reset_index(drop = True)
-frames_b = [filtrated_phi_b, df_max]
-new_df_total_b = pd.concat(frames_b)
-new_df_total_b = new_df_total_b.reset_index(drop = True)
-
-def filter_max_2(df):
-    df = df.groupby(["run_number", "ev_id"], sort=True).filter(lambda x:
-            len(x) > 1)
-#    df["pt_cand_max"] = 0.
-#    df["inv_cand_max"] = 0.
-#    df["phi_cand_max"] = 0.
-#    df["eta_cand_max"] = 0.
-    def max_el(group):
-        df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
-        df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
-        df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
-        df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
-        return df
-    grouped = df.groupby(["run_number", "ev_id"]).apply(max_el)
-    df = df[df["delta_phi"] > 0]
-    return df
-
-#def filter_max_2(df):
-#    df = df.groupby(["run_number", "ev_id"], sort=True).filter(lambda x:
-#            len(x) > 1)
-##    df["pt_cand_max"] = 0.
-##    df["inv_cand_max"] = 0.
-##    df["phi_cand_max"] = 0.
-##    df["eta_cand_max"] = 0.
-#    grouped = df.groupby(["run_number", "ev_id"])
-#    for name, group in grouped:
-#        df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
-#        df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
-#        df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
-#        df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
-#    pt_max = grouped["pt_cand"].idxmax()
-#    df = df[df["delta_phi"] > 0]
-#    return df
-
-
-start = time.time()
-new_df_max_a = parallelize_df(new_df_total_a, filter_max_2)
-print(new_df_max_a)
-new_df_max_b = parallelize_df(new_df_total_b, filter_max_2)
-#new_df_max = filter_max_2(new_df_total)
-end = time.time()
-print("creating primary particles vectors", end - start)
-
-pt_vec_max_a = new_df_max_a["pt_cand_max"]
-pt_vec_max_b = new_df_max_b["pt_cand_max"]
+pt_vec_max_a = filtrated_phi_a["pt_cand_max"]
+pt_vec_max_b = filtrated_phi_b["pt_cand_max"]
 pt_vec_rest_a = filtrated_phi_a["pt_cand"]
 pt_vec_rest_b = filtrated_phi_b["pt_cand"]
 
-#print(len(pt_vec_max_a), len(pt_vec_rest_a), len(pt_vec_max_b),
-#        len(pt_vec_rest_b))
-
-phi_max_vec_a = new_df_max_a["phi_cand_max"]
-phi_max_vec_b = new_df_max_b["phi_cand_max"]
+phi_max_vec_a = filtrated_phi_a["phi_cand_max"]
+phi_max_vec_b = filtrated_phi_b["phi_cand_max"]
 phi_vec_a = filtrated_phi_a["phi_cand"]
 phi_vec_b = filtrated_phi_b["phi_cand"]
 
-eta_max_vec_a = new_df_max_a["eta_cand_max"]
-eta_max_vec_b = new_df_max_b["eta_cand_max"]
+eta_max_vec_a = filtrated_phi_a["eta_cand_max"]
+eta_max_vec_b = filtrated_phi_b["eta_cand_max"]
 eta_vec_a = filtrated_phi_a["eta_cand"]
 eta_vec_b = filtrated_phi_b["eta_cand"]
 
-inv_mass_max_vec_a = new_df_max_a["inv_cand_max"]
-inv_mass_max_vec_b = new_df_max_b["inv_cand_max"]
+inv_mass_max_vec_a = filtrated_phi_a["inv_cand_max"]
+inv_mass_max_vec_b = filtrated_phi_b["inv_cand_max"]
 inv_mass_vec_a = filtrated_phi_a["inv_mass"]
 inv_mass_vec_b = filtrated_phi_b["inv_mass"]
+inv_mass_tot = filtrated_phi["inv_mass"]
+inv_mass_tot_max = filtrated_phi["inv_cand_max"]
 
-cYields = TCanvas('cYields', 'The Fit Canvas')
+print("here")
+h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 200,
+        inv_mass_tot.min(), inv_mass_tot.max(), 200,
+        inv_mass_tot_max.min(), inv_mass_tot_max.max())
+#DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
+for i in range (0, len(inv_mass_tot)-1):
+        h_DDbar_mass_tot.Fill(inv_mass_tot.tolist()[i],
+                inv_mass_tot_max.tolist()[i])
+h_DDbar_mass_tot.SetOption("lego2z")
+h_DDbar_mass_tot.Draw("LEGO2Z")
+cYields.SaveAs("h_DDbar_tot.png")
+
+
 h_DDbar_mass_a = TH2F("Dbar-D plot region A" , "", 200,
         inv_mass_vec_a.min(), inv_mass_vec_a.max(), 200,
         inv_mass_max_vec_a.min(), inv_mass_max_vec_a.max())
-DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
-fill_hist(h_DDbar_mass_a, DDbar_a)
-h_DDbar_mass_a.Draw("colz")
+#DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
+for i in range (0, len(inv_mass_vec_a)-1):
+        h_DDbar_mass_a.Fill(inv_mass_vec_a.tolist()[i],
+                inv_mass_max_vec_a.tolist()[i])
+h_DDbar_mass_a.SetOption("lego2z")
+h_DDbar_mass_a.Draw("")
 cYields.SaveAs("h_DDbar_A.png")
 
-cYields = TCanvas('cYields', 'The Fit Canvas')
+
 h_DDbar_mass_b = TH2F("Dbar-D plot region B" , "", 200,
         inv_mass_vec_b.min(), inv_mass_vec_b.max(), 200,
         inv_mass_max_vec_b.min(), inv_mass_max_vec_b.max())
-DDbar_b = np.column_stack((inv_mass_vec_b, inv_mass_max_vec_b))
-fill_hist(h_DDbar_mass_b, DDbar_b)
-h_DDbar_mass_b.Draw("colz")
+#DDbar_b = np.column_stack((inv_mass_vec_b, inv_mass_max_vec_b))
+for i in range (0, len(inv_mass_vec_b)-1):
+        h_DDbar_mass_b.Fill(inv_mass_vec_b.tolist()[i],
+                inv_mass_max_vec_b.tolist()[i])
+h_DDbar_mass_b.SetOption("lego2z")
+h_DDbar_mass_b.Draw("")
 cYields.SaveAs("h_DDbar_B.png")
 
 cYields.SetLogy(False)
