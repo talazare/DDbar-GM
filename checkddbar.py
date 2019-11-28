@@ -66,7 +66,7 @@ print("Data loaded in", end - start, "sec")
 
 if(debug):
     print("Debug mode: reduced data")
-    dfreco = dfreco[:20000]
+    dfreco = dfreco[:1000000]
 print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
@@ -191,20 +191,23 @@ cYields.SaveAs("h_grouplen.png")
 
 #parallelized functions over the dataframe
 
-num_cores = int(cpu_count()/2)
-num_part  = num_cores*2
+num_cores = int(cpu_count()*0.5)
+num_part  = num_cores*4
 
 print("parallelizing will be done with", num_cores, "cores")
-def parallelize_df(df, func, num_cores=num_cores, num_part=num_part):
-    #sort dataframe
-    df.sort_values(["run_number", "ev_id"], inplace=True)
+
+def split_df(df, num_part):
     split_indices = (df.shape[0] // num_part) * np.arange(1, num_part, dtype=np.int)
     for i in range (0, num_part-1):
         while ( df.iloc[split_indices[i]][["run_number", "ev_id"]] ==
                 df.iloc[split_indices[i]-1][["run_number", "ev_id"]]).all():
             split_indices[i] += 1
     df_split = np.split(df, split_indices)
-    #df_split = np.array_split(df, num_part)
+    return df_split
+
+def parallelize_df(df, func, num_cores=num_cores, num_part=num_part):
+    #NB: work with presorted dataframe!!!
+    df_split = split_df(df, num_part)
     pool = Pool(num_cores)
     df = pd.concat(pool.map(func, df_split))
     pool.close()
@@ -220,36 +223,43 @@ def filter_phi(df):
         delta_phi = np.abs(phi_max - group["phi_cand"])
         delta_phi_all.extend(delta_phi)
     df["delta_phi"] = delta_phi_all
-    print(df.shape) #returns ~(350, 75)
-
-    # max_el function returns me amount of the rows, that is ~300 times bigger
-    # than it was before.
-    # guess: return df affects bad (concate all df for each group). return group gives 0. in the previous
-    # version worked fine. why?
     def max_el(group):
         df.loc[group.index, "pt_cand_max"]  = df.loc[group["pt_cand"].idxmax(), "pt_cand"]
         df.loc[group.index, "inv_cand_max"] = df.loc[group["pt_cand"].idxmax(), "inv_mass"]
         df.loc[group.index, "phi_cand_max"] = df.loc[group["pt_cand"].idxmax(), "phi_cand"]
         df.loc[group.index, "eta_cand_max"] = df.loc[group["pt_cand"].idxmax(), "eta_cand"]
-        print("this!", df.shape) # normal df shape (350, 79)
         return df
-    df = df.groupby(["run_number", "ev_id"], sort = True).apply(max_el)
-    print(df.shape) #big df shape ~(110000, 79)
+    grouped = df.groupby(["run_number", "ev_id"]).apply(max_el)
     return df
 
+# create smaller dataframes to work with
 start = time.time()
-
-filtrated_phi_0 = parallelize_df(dfreco, filter_phi)
-print(filtrated_phi_0)
-
-#problem with filtrated phi!!
-
-
+df_work = dfreco[["run_number", "ev_id", "pt_cand", "inv_mass", "phi_cand",
+        "eta_cand"]]
+end = time.time()
+print("creating workin df", end - start)
+split_const = int(df_work.shape[0]/500000)
+df_work.sort_values(["run_number", "ev_id"], inplace=True)
+working_df = split_df(df_work, split_const)
+start = time.time()
+dataframe = []
+timing = 0
+est = 0
+for i in range (0,  split_const):
+    start = time.time()
+    print("progress:", i, "out of", split_const, "| process time: ", timing,
+    "| estimated full time:", est)
+    df = parallelize_df(working_df[i], filter_phi)
+    end = time.time()
+    est = (end - start)*split_const
+    timing += end - start
+    dataframe.append(df)
+filtrated_phi_0 = pd.concat(dataframe)
+filtrated_phi_0.to_pickle("./filtrated_df.pkl")
 end2 = time.time()
-
+print(filtrated_phi_0)
 print("paralellized calculations are done in", end2 - start, "sec")
 
-input()
 filtrated_phi = filtrated_phi_0[filtrated_phi_0["delta_phi"] > 0]
 
 h_d_phi_cand = TH1F("delta phi cand" , "", 200, 0.1, 6)
@@ -374,14 +384,21 @@ inv_mass_vec_b = filtrated_phi_b["inv_mass"]
 inv_mass_tot = filtrated_phi["inv_mass"]
 inv_mass_tot_max = filtrated_phi["inv_cand_max"]
 
-print("here")
 h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 200,
         inv_mass_tot.min(), inv_mass_tot.max(), 200,
         inv_mass_tot_max.min(), inv_mass_tot_max.max())
 #DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
+t = 0
+est = 0
 for i in range (0, len(inv_mass_tot)-1):
-        h_DDbar_mass_tot.Fill(inv_mass_tot.tolist()[i],
-                inv_mass_tot_max.tolist()[i])
+    start = time.time()
+    if i%10000 == 0:
+        print("count is", i, "out of", len(inv_mass_tot), "time passed:", t,
+        "total time", est)
+    h_DDbar_mass_tot.Fill(inv_mass_tot.tolist()[i], inv_mass_tot_max.tolist()[i])
+    end = time.time()
+    t += end-start
+    est = (end - start)*len(inv_mass_tot)
 h_DDbar_mass_tot.SetOption("lego2z")
 h_DDbar_mass_tot.Draw("LEGO2Z")
 cYields.SaveAs("h_DDbar_tot.png")
@@ -391,21 +408,36 @@ h_DDbar_mass_a = TH2F("Dbar-D plot region A" , "", 200,
         inv_mass_vec_a.min(), inv_mass_vec_a.max(), 200,
         inv_mass_max_vec_a.min(), inv_mass_max_vec_a.max())
 #DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
+t = 0
+est = 0
 for i in range (0, len(inv_mass_vec_a)-1):
+    start = time.time()
+    if i%10000 == 0:
+        print("count is", i, "out of", len(inv_mass_vec_a), "time passed:", t,
+        "total time", est)
         h_DDbar_mass_a.Fill(inv_mass_vec_a.tolist()[i],
                 inv_mass_max_vec_a.tolist()[i])
+        end = time.time()
+        t += end-start
+        est = (end - start)*len(inv_mass_vec_a)
 h_DDbar_mass_a.SetOption("lego2z")
 h_DDbar_mass_a.Draw("")
 cYields.SaveAs("h_DDbar_A.png")
 
-
+t = 0
+est = 0
 h_DDbar_mass_b = TH2F("Dbar-D plot region B" , "", 200,
         inv_mass_vec_b.min(), inv_mass_vec_b.max(), 200,
         inv_mass_max_vec_b.min(), inv_mass_max_vec_b.max())
 #DDbar_b = np.column_stack((inv_mass_vec_b, inv_mass_max_vec_b))
 for i in range (0, len(inv_mass_vec_b)-1):
-        h_DDbar_mass_b.Fill(inv_mass_vec_b.tolist()[i],
-                inv_mass_max_vec_b.tolist()[i])
+     if i%10000 == 0:
+        print("count is", i, "out of", len(inv_mass_vec_b), "time passed:", t,
+        "total time", est)
+     h_DDbar_mass_b.Fill(inv_mass_vec_b.tolist()[i], inv_mass_max_vec_b.tolist()[i])
+     end = time.time()
+     t += end-start
+     est = (end - start)*len(inv_mass_vec_b)
 h_DDbar_mass_b.SetOption("lego2z")
 h_DDbar_mass_b.Draw("")
 cYields.SaveAs("h_DDbar_B.png")
