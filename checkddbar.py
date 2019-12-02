@@ -63,7 +63,7 @@ print(dfreco.columns)
 
 binning = 200
 
-hfile = TFile( 'pre_selection_histos.root', 'RECREATE', 'ROOT file with histograms' )  
+hfile = TFile('pre_selection_histos.root', 'RECREATE', 'ROOT file with histograms' )
 cYields = TCanvas('cYields', 'The Fit Canvas')
 fit_fun1 = TF1("fit_fun1", "expo" ,1.64, 1.82)
 fit_fun2 = TF1("fit_fun2", "gaus", 1.82, 1.92)
@@ -180,6 +180,8 @@ cYields.SetLogy(True)
 h_grouplen.Draw()
 cYields.SaveAs("h_grouplen.png")
 
+hfile.Write()
+
 #parallelized functions over the dataframe
 
 num_cores = int(cpu_count()*0.5)
@@ -250,4 +252,3 @@ filtrated_phi_0.to_pickle("./filtrated_df_mc.pkl")
 end2 = time.time()
 print(filtrated_phi_0)
 print("paralellized calculations are done in", end2 - start, "sec")
-hfile.Write()

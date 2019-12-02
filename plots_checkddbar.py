@@ -3,6 +3,7 @@ import pandas as pd
 import pickle
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+import os, sys
 
 from ROOT import TH1F, TH2F, TH3F, TF1, TCanvas, TFile
 from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
@@ -12,6 +13,9 @@ from multiprocessing import Pool, cpu_count
 
 import lz4.frame
 import time
+
+foldname = "./results_mc"
+os.makedirs(foldname, exist_ok=True);
 
 #debug = True
 debug = False
@@ -28,7 +32,7 @@ b_cut_upper = 3*np.pi/2
 
 start= time.time()
 
-dfreco = pickle.load(openfile("./filtrated_df_mc.pkl", "rb"))
+dfreco = pickle.load(openfile("./data/filtrated_df_mc.pkl", "rb"))
 
 dfreco = dfreco.reset_index(drop = True)
 
@@ -44,7 +48,9 @@ print(dfreco.columns)
 
 filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
 
-hfile = TFile( 'post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
+os.chdir(foldname)
+
+hfile = TFile('post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
 
 cYields = TCanvas('cYields', 'The Fit Canvas')
 
@@ -191,6 +197,8 @@ mass_tot_max_min = filtrated_phi["inv_mass"].min()
 mass_tot_max_max = filtrated_phi["inv_mass"].max()
 mass_tot_min = filtrated_phi["inv_mass"].min()
 mass_tot_max = filtrated_phi["inv_mass"].max()
+
+cYields.cd()
 
 h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 50, mass_tot_min, mass_tot_max,
         50, mass_tot_max_min, mass_tot_max_max)

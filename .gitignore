@@ -3,4 +3,5 @@
 *.pdf
 *.root
 *.pkl
+./results*
 ./data
