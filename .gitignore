@@ -1,3 +1,6 @@
 *.png
 *.txt
 *.pdf
+*.root
+*.pkl
+./data
