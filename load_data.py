@@ -11,14 +11,6 @@ from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar,
 
 import lz4.frame
 import time
-#debug = True
-#debug = False
-
-#real_data = True
-#real_data = False
-
-#plots = True
-#plots = False
 
 def main(debug = True, real_data = False, plots = False):
     start= time.time()
@@ -181,5 +173,5 @@ def main(debug = True, real_data = False, plots = False):
 
     hfile.Write()
 
-main()
-input()
+if __name__=="__main__":
+    main()

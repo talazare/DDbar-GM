@@ -14,28 +14,7 @@ main(False, False, True)
 
 #parallelized functions over the dataframe
 
-#num_cores = int(cpu_count()*0.5)
-#num_part  = num_cores*4
-
 print("parallelizing will be done with", num_cores, "cores")
-
-#def split_df(df, num_part):
-#    split_indices = (df.shape[0] // num_part) * np.arange(1, num_part, dtype=np.int)
-#    for i in range (0, num_part-1):
-#        while ( df.iloc[split_indices[i]][["run_number", "ev_id"]] ==
-#                df.iloc[split_indices[i]-1][["run_number", "ev_id"]]).all():
-#            split_indices[i] += 1
-#    df_split = np.split(df, split_indices)
-#    return df_split
-#
-#def parallelize_df(df, func, num_cores=num_cores, num_part=num_part):
-#    #NB: work with presorted dataframe!!!
-#    df_split = split_df(df, num_part)
-#    pool = Pool(num_cores)
-#    df = pd.concat(pool.map(func, df_split))
-#    pool.close()
-#    pool.join()
-#    return df
 
 def filter_phi(df):
     delta_phi_all = []
