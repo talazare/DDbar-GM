@@ -10,18 +10,31 @@ from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
 from root_numpy import fill_hist
 from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar, openfile
 from multiprocessing import Pool, cpu_count
+from parallel_calc import split_df, parallelize_df, num_cores, num_part
 
 import lz4.frame
 import time
 
-foldname = "./results_mc"
+foldname = "./results_mc_fake_fake"
 os.makedirs(foldname, exist_ok=True);
 
 #debug = True
 debug = False
 
-make_phi_compare = True
-#make_phi_compare = False
+#sig_sig = True
+sig_sig = False
+
+#sig_fake = True
+sig_fake = False
+
+#fake_sig = True
+fake_sig = False
+
+fake_fake = True
+#fake_fake = False
+
+#make_phi_compare = True
+make_phi_compare = False
 
 d_phi_cut = 0.
 
@@ -32,7 +45,7 @@ b_cut_upper = 3*np.pi/2
 
 start= time.time()
 
-dfreco = pickle.load(openfile("./data/filtrated_df_mc.pkl", "rb"))
+dfreco = pickle.load(openfile("./filtrated_df_mc.pkl", "rb"))
 
 dfreco = dfreco.reset_index(drop = True)
 
@@ -41,13 +54,47 @@ print("Data loaded in", end - start, "sec")
 
 if(debug):
     print("Debug mode: reduced data")
-    dfreco = dfreco[:1000000]
+    dfreco = dfreco[:10000]
 print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
 
-filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
+df_d = dfreco[dfreco["is_d"] == 1]
+df_dbar = dfreco[dfreco["is_d"] == 0]
+df_d_sig = df_d[df_d["ismcsignal"] == 1]
+df_d_fake = df_d[df_d["ismcsignal"] == 0]
+df_dbar_sig = df_dbar[df_dbar["ismcsignal"] == 1]
+df_dbar_fake = df_dbar[df_dbar["ismcsignal"] == 0]
 
+if (sig_sig):
+    frames = [df_d_sig, df_dbar_sig]
+    filtrated_phi_0 = pd.concat(frames)
+
+if (sig_fake):
+    frames = [df_d_sig, df_dbar_fake]
+    filtrated_phi_0 = pd.concat(frames)
+
+if (fake_sig):
+    frames = [df_d_fake, df_dbar_sig]
+    filtrated_phi_0 = pd.concat(frames)
+
+if (fake_fake):
+    frames = [df_d_fake, df_dbar_fake]
+    filtrated_phi_0 = pd.concat(frames)
+
+def filtrate_df(df):
+    grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
+          x: len(x) > 1)
+    new_df = grouped[grouped["delta_phi"] > 0]
+    return new_df
+
+start = time.time()
+print("sorting values...")
+filtrated_phi_0.sort_values(["run_number", "ev_id"], inplace=True)
+print("start parallelise...")
+filtrated_phi = parallelize_df(filtrated_phi_0, filtrate_df)
+end = time.time()
+print("paralellized calculations done in", end-start, "sec")
 os.chdir(foldname)
 
 hfile = TFile('post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
@@ -214,8 +261,12 @@ for i in range (0, len(inv_mass_tot)-1):
     end = time.time()
     t += end-start
     est = (end - start)*len(inv_mass_tot)
+h_DDbar_mass_tot.GetXaxis().SetTitleOffset(1.8)
+h_DDbar_mass_tot.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
+h_DDbar_mass_tot.GetYaxis().SetTitleOffset(1.8)
+h_DDbar_mass_tot.GetYaxis().SetTitle("inv_mass of D, GeV")
 h_DDbar_mass_tot.SetOption("lego2z")
-h_DDbar_mass_tot.Draw("LEGO2Z")
+h_DDbar_mass_tot.Draw("")
 cYields.SaveAs("h_DDbar_tot.png")
 
 
@@ -234,6 +285,10 @@ for i in range (0, len(inv_mass_vec_a)-1):
     end = time.time()
     t += end-start
     est = (end - start)*len(inv_mass_vec_a)
+h_DDbar_mass_a.GetXaxis().SetTitleOffset(1.8)
+h_DDbar_mass_a.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
+h_DDbar_mass_a.GetYaxis().SetTitleOffset(1.8)
+h_DDbar_mass_a.GetYaxis().SetTitle("inv_mass of D, GeV")
 h_DDbar_mass_a.SetOption("lego2z")
 h_DDbar_mass_a.Draw("")
 cYields.SaveAs("h_DDbar_A.png")
@@ -244,13 +299,18 @@ h_DDbar_mass_b = TH2F("Dbar-D plot region B" , "", 50, mass_min_b, mass_max_b,
         50, mass_tot_max_min, mass_tot_max_max)
 #DDbar_b = np.column_stack((inv_mass_vec_b, inv_mass_max_vec_b))
 for i in range (0, len(inv_mass_vec_b)-1):
-     if i%10000 == 0:
+    start = time.time()
+    if i%10000 == 0:
         print("count is", i, "out of", len(inv_mass_vec_b), "time passed:", t,
         "total time", est)
-     h_DDbar_mass_b.Fill(inv_mass_vec_b[i], inv_mass_max_vec_b[i])
-     end = time.time()
-     t += end-start
-     est = (end - start)*len(inv_mass_vec_b)
+    h_DDbar_mass_b.Fill(inv_mass_vec_b[i], inv_mass_max_vec_b[i])
+    end = time.time()
+    t += end-start
+    est = (end - start)*len(inv_mass_vec_b)
+h_DDbar_mass_b.GetXaxis().SetTitleOffset(1.8)
+h_DDbar_mass_b.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
+h_DDbar_mass_b.GetYaxis().SetTitleOffset(1.8)
+h_DDbar_mass_b.GetYaxis().SetTitle("inv_mass of D, GeV")
 h_DDbar_mass_b.SetOption("lego2z")
 h_DDbar_mass_b.Draw("")
 cYields.SaveAs("h_DDbar_B.png")
