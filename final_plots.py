@@ -46,7 +46,7 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
 
     if (full_data):
         filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
-    else:
+    if (full_data == False):
         def filtrate_df(df):
             grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
                   x: len(x) > 1)
