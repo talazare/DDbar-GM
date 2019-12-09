@@ -5,26 +5,40 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 import os, sys
 
-from ROOT import TH1F, TH2F, TH3F, TF1, TCanvas, TFile
+from ROOT import TH1F, TH2F, TH3F, TF1, TF2, TCanvas, TFile
 from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
 from root_numpy import fill_hist
 from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar, openfile
 from multiprocessing import Pool, cpu_count
 from parallel_calc import split_df, parallelize_df, num_cores, num_part
+from phi_compare import make_phi_compare
 
 import lz4.frame
 import time
-
-foldname = "./results_real_data"
-os.makedirs(foldname, exist_ok=True);
 
 binning = 50
 
 #debug = True
 debug = False
 
-#make_phi_compare = True
-make_phi_compare = False
+#sig_sig = True
+sig_sig = False
+
+#sig_fake = True
+sig_fake = False
+
+#fake_sig = True
+fake_sig = False
+
+#fake_fake = True
+fake_fake = False
+
+full_data = True
+#full_data = False
+
+compare_phi_before = False
+compare_phi_after = False
+
 
 d_phi_cut = 0.
 
@@ -35,7 +49,7 @@ b_cut_upper = 3*np.pi/2
 
 start= time.time()
 
-dfreco = pickle.load(openfile("./data/filtrated_df.pkl", "rb"))
+dfreco = pickle.load(openfile("./filtrated_df_mc.pkl", "rb"))
 
 dfreco = dfreco.reset_index(drop = True)
 
@@ -49,22 +63,110 @@ print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
 
-filtrated_phi_0 = dfreco[dfreco["delta_phi"] > 0]
+foldname = "./results_mc"
+os.makedirs(foldname, exist_ok=True);
 
-def filtrate_df(df):
-    grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
-          x: len(x) > 1)
-    new_df = grouped[grouped["delta_phi"] > 0]
-    return new_df
-
-start = time.time()
-print("sorting values...")
-filtrated_phi_0.sort_values(["run_number", "ev_id"], inplace=True)
-print("start parallelise...")
-filtrated_phi = parallelize_df(filtrated_phi_0, filtrate_df)
-end = time.time()
-print("paralellized calculations done in", end-start, "sec")
 os.chdir(foldname)
+if compare_phi_before:
+    make_phi_compare(dfreco)
+
+df_d = dfreco[dfreco["is_d"] == 1]
+df_dbar = dfreco[dfreco["is_d"] == 0]
+df_d_sig = df_d[df_d["ismcsignal"] == 1]
+df_d_fake = df_d[df_d["ismcsignal"] == 0]
+df_dbar_sig = df_dbar[df_dbar["ismcsignal"] == 1]
+df_dbar_fake = df_dbar[df_dbar["ismcsignal"] == 0]
+
+def total_fit():
+    Nsig = 83420
+    Nbkg = 5499
+    Nsigbkg = 16616
+    Nbkgsig = 13914
+    cYields = TCanvas('cYields', 'The Fit Canvas')
+    fit_fun1 = TF1("fit_fun_1", "gaus", 1.64, 2.1)
+    h_invmass_dsig = TH1F("invariant mass" , "", binning, df_d_sig.inv_mass.min(),
+            df_d_sig.inv_mass.max())
+    fill_hist(h_invmass_dsig, df_d_sig.inv_mass)
+    h_invmass_dsig.Fit(fit_fun1)
+    par1 = fit_fun1.GetParameters()
+    h_invmass_dsig.Draw()
+    cYields.SaveAs("h_invmass_dsig.png")
+
+    fit_fun2 = TF1("fit_fun2", "gaus", 1.82, 1.92)
+    h_invmass_dbkg = TH1F("invariant mass" , "", binning, df_d_fake.inv_mass.min(),
+            df_d_fake.inv_mass.max())
+    fill_hist(h_invmass_dbkg, df_d_fake.inv_mass)
+    h_invmass_dbkg.Fit(fit_fun2)
+    par2 = fit_fun2.GetParameters()
+    h_invmass_dbkg.Draw()
+    cYields.SaveAs("h_invmass_dbkg.png")
+
+    fit_fun3 = TF1("fit_fun_3", "gaus", 1.64, 2.1)
+    h_invmass_dbarsig = TH1F("invariant mass" , "", binning, df_dbar_sig.inv_mass.min(),
+            df_dbar_sig.inv_mass.max())
+    fill_hist(h_invmass_dbarsig, df_dbar_sig.inv_mass)
+    h_invmass_dbarsig.Fit(fit_fun3)
+    par3 = fit_fun3.GetParameters()
+    h_invmass_dbarsig.Draw()
+    cYields.SaveAs("h_invmass_dbarsig.png")
+
+    fit_fun4 = TF1("fit_fun_4", "gaus", 1.64, 2.1)
+    h_invmass_dbarbkg = TH1F("invariant mass" , "", binning, df_dbar_fake.inv_mass.min(),
+            df_dbar_fake.inv_mass.max())
+    fill_hist(h_invmass_dbarbkg, df_dbar_fake.inv_mass)
+    h_invmass_dbarbkg.Fit(fit_fun4)
+    par4 = fit_fun4.GetParameters()
+    h_invmass_dbarbkg.Draw()
+    cYields.SaveAs("h_invmass_dbarbkg.png")
+    #fit_func = str(Nsig) + "*[0]*np.exp(-((x-[1])**2)/(2*[2]))*[3]*np.exp(-((y-[4])**2)/(2*[5]))+Nsigbkg*[0]*np.exp(-((x-[1])**2)/(2*[2]))*[6]*np.exp(-((y-[7])**2)/(2*[8]))+Nbkgsig*[9]*np.exp(-((x-[10])**2)/(2*[11]))*[3]*np.exp(-((y-[4])**2)/(2*[5]))+Nbkg*[9]*np.exp(-((x-[10])**2)/(2*[11]))*[6]*np.exp(-((y-[7])**2)/(2*[8]))"
+    fit_func = str(Nsig) + "*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+"+str(Nsigbkg)+"*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))+"+str(Nbkgsig)+"*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+"+str(Nbkg)+"*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))"
+    total_fit = TF2("total_fit", fit_func, 1.64, 2.1, 1.64, 2.1)
+    parameters = np.array([par1[0], par1[1], par1[2], par2[0], par2[1],
+            par2[2], par3[0], par3[1], par3[2], par4[0], par4[1], par4[2]])
+    total_fit.SetParameters(parameters)
+    return total_fit
+
+if (sig_sig):
+    frames = [df_d_sig, df_dbar_sig]
+    filtrated_phi_0 = pd.concat(frames)
+    foldname = "./results_mc_sig_sig"
+    os.makedirs(foldname, exist_ok=True);
+
+if (sig_fake):
+    frames = [df_d_sig, df_dbar_fake]
+    filtrated_phi_0 = pd.concat(frames)
+    foldname = "./results_mc_sig_sig"
+    os.makedirs(foldname, exist_ok=True);
+
+if (fake_sig):
+    frames = [df_d_fake, df_dbar_sig]
+    filtrated_phi_0 = pd.concat(frames)
+    foldname = "./results_mc_sig_sig"
+    os.makedirs(foldname, exist_ok=True);
+
+if (fake_fake):
+    frames = [df_d_fake, df_dbar_fake]
+    filtrated_phi_0 = pd.concat(frames)
+    foldname = "./results_mc_sig_sig"
+    os.makedirs(foldname, exist_ok=True);
+
+if (full_data):
+    filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
+else:
+    def filtrate_df(df):
+        grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
+              x: len(x) > 1)
+        new_df = grouped[grouped["delta_phi"] > 0]
+        return new_df
+
+    start = time.time()
+    print("sorting values...")
+    filtrated_phi_0.sort_values(["run_number", "ev_id"], inplace=True)
+    print("start parallelise...")
+    filtrated_phi = parallelize_df(filtrated_phi_0, filtrate_df)
+    end = time.time()
+    print("paralellized calculations done in", end-start, "sec")
+    os.chdir(foldname)
 
 hfile = TFile('post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
 
@@ -76,83 +178,8 @@ cYields.SetLogy(True)
 h_d_phi_cand.Draw()
 cYields.SaveAs("h_d_phi_cand.png")
 
-if (make_phi_compare):
-
-    cYields_2 = TCanvas('cYields_2', 'The Fit Canvas 2')
-
-    filtrated_phi_1 = filtrated_phi.query("pt_cand < 4")
-
-    d_phi_dist_1 =  filtrated_phi_1["delta_phi"]
-
-    filtrated_phi_2 = filtrated_phi.query("pt_cand > 4")
-    filtrated_phi_2 = filtrated_phi_2.query("pt_cand < 6")
-
-    d_phi_dist_2 =  filtrated_phi_2["delta_phi"]
-
-    filtrated_phi_3 = filtrated_phi.query("pt_cand > 6")
-    filtrated_phi_3 = filtrated_phi_3.query("pt_cand < 8")
-
-    d_phi_dist_3 =  filtrated_phi_3["delta_phi"]
-
-    filtrated_phi_4 = filtrated_phi.query("pt_cand > 8")
-    filtrated_phi_4 = filtrated_phi_4.query("pt_cand < 10")
-
-    d_phi_dist_4 =  filtrated_phi_4["delta_phi"]
-
-    filtrated_phi_5 = filtrated_phi.query("pt_cand > 10")
-    filtrated_phi_5 = filtrated_phi_5.query("pt_cand < 24")
-
-    d_phi_dist_5 =  filtrated_phi_5["delta_phi"]
-
-    h_d_phi_cand_1 = TH1F("delta phi cand, pt range:[<4]" , "Normalized plot", 200,
-            d_phi_dist_1.min(), d_phi_dist_1.max())
-    fill_hist(h_d_phi_cand_1, d_phi_dist_1)
-    h_d_phi_cand_1.Scale(1/ h_d_phi_cand_1.Integral())
-    h_d_phi_cand_2 = TH1F("delta phi cand, pt range:[4-6]" , "", 200,
-            d_phi_dist_1.min(), d_phi_dist_1.max())
-    fill_hist(h_d_phi_cand_2, d_phi_dist_2)
-    h_d_phi_cand_2.Scale(1/ h_d_phi_cand_2.Integral())
-    h_d_phi_cand_3 = TH1F("delta phi cand, pt range:[6-8]" , "", 200,
-            d_phi_dist_1.min(), d_phi_dist_1.max())
-    fill_hist(h_d_phi_cand_3, d_phi_dist_3)
-    h_d_phi_cand_3.Scale(1/ h_d_phi_cand_3.Integral())
-    h_d_phi_cand_4 = TH1F("delta phi cand, pt range:[8-10]" , "", 200,
-            d_phi_dist_1.min(), d_phi_dist_1.max())
-    fill_hist(h_d_phi_cand_4, d_phi_dist_4)
-    h_d_phi_cand_4.Scale(1/ h_d_phi_cand_4.Integral())
-    h_d_phi_cand_5 = TH1F("delta phi cand, pt range:[10-24]" , "", 200,
-            d_phi_dist_1.min(), d_phi_dist_1.max())
-    fill_hist(h_d_phi_cand_5, d_phi_dist_5)
-    h_d_phi_cand_5.Scale(1/ h_d_phi_cand_5.Integral())
-    cYields_2.SetLogy(True)
-    h_d_phi_cand_1.SetStats(0)
-    h_d_phi_cand_1.SetLineColor(kBlack)
-    h_d_phi_cand_1.Draw()
-    h_d_phi_cand_2.SetStats(0)
-    h_d_phi_cand_2.SetLineColor(kRed)
-    h_d_phi_cand_2.Draw("same")
-    h_d_phi_cand_3.SetStats(0)
-    h_d_phi_cand_3.SetLineColor(kBlue)
-    h_d_phi_cand_3.Draw("same")
-    h_d_phi_cand_4.SetStats(0)
-    h_d_phi_cand_4.SetLineColor(kGreen)
-    h_d_phi_cand_4.Draw("same")
-    h_d_phi_cand_5.SetStats(0)
-    h_d_phi_cand_5.SetLineColor(kMagenta)
-    h_d_phi_cand_5.Draw("same")
-    leg = TLegend(0.45, 0.7, 0.95, 0.87)
-    leg.SetBorderSize(0)
-    leg.SetFillColor(0)
-    leg.SetFillStyle(0)
-    leg.SetTextFont(42)
-    leg.SetTextSize(0.035)
-    leg.AddEntry(h_d_phi_cand_1, h_d_phi_cand_1.GetName(),"L")
-    leg.AddEntry(h_d_phi_cand_2, h_d_phi_cand_2.GetName(),"L")
-    leg.AddEntry(h_d_phi_cand_3, h_d_phi_cand_3.GetName(),"L")
-    leg.AddEntry(h_d_phi_cand_4, h_d_phi_cand_4.GetName(),"L")
-    leg.AddEntry(h_d_phi_cand_5, h_d_phi_cand_5.GetName(),"L")
-    leg.Draw("same")
-    cYields_2.SaveAs("h_d_phi_cand_compare.png")
+if compare_phi_after:
+    make_phi_compare(filtrated_phi)
 
 print("Delta phi cuts region A: [", a_cut_lower, a_cut_upper,"]")
 print("Delta phi cuts region B: [", b_cut_lower, a_cut_lower,"]&[",
@@ -216,6 +243,11 @@ mass_tot_max = filtrated_phi["inv_mass"].max()
 
 cYields.cd()
 
+plots(sig_sig)
+plots(sig_bkg)
+plots(bkg_sig)
+plots(bkg_bkg)
+
 h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 50, mass_tot_min, mass_tot_max,
         50, mass_tot_max_min, mass_tot_max_max)
 #DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
@@ -230,12 +262,17 @@ for i in range (0, len(inv_mass_tot)-1):
     end = time.time()
     t += end-start
     est = (end - start)*len(inv_mass_tot)
+if (full_data):
+    fit_fun = total_fit()
+    h_DDbar_mass_tot.Fit(fit_fun)
+    par = fit_fun.GetParameters()
 h_DDbar_mass_tot.GetXaxis().SetTitleOffset(1.8)
 h_DDbar_mass_tot.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
 h_DDbar_mass_tot.GetYaxis().SetTitleOffset(1.8)
 h_DDbar_mass_tot.GetYaxis().SetTitle("inv_mass of D, GeV")
 h_DDbar_mass_tot.SetOption("lego2z")
-h_DDbar_mass_tot.Draw("")
+h_DDbar_mass_tot.Draw("same")
+hfile.Write()
 cYields.SaveAs("h_DDbar_tot.png")
 
 
@@ -369,6 +406,5 @@ leg.AddEntry(h_second_cand_eta_b, h_second_cand_eta_b.GetName(),"L")
 leg.Draw("same")
 cYields.SaveAs("h_eta_cand_max_min.png")
 
-hfile.Write()
 
 
