@@ -16,43 +16,51 @@ from phi_compare import make_phi_compare
 import lz4.frame
 import time
 binning = 50
+d_phi_cut = 0.
+
+b_cut_lower = np.pi/2
+a_cut_lower = 3*np.pi/4
+a_cut_upper = 5*np.pi/4
+b_cut_upper = 3*np.pi/2
+
+def filtrate_df(df):
+    grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
+          x: len(x) > 1)
+    new_df = grouped[grouped["delta_phi"] > 0]
+    return new_df
+
 
 def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco):
+        df_dbar_fake, dfreco, compare_phi_after, tot_entries):
 
     if (sig_sig):
         frames = [df_d_sig, df_dbar_sig]
         filtrated_phi_0 = pd.concat(frames)
-        foldname = "./results_mc_sig_sig"
+        foldname = "/home/talazare/DDbar-GM/results/results_mc/results_mc_sig_sig"
         os.makedirs(foldname, exist_ok=True);
 
     if (sig_fake):
         frames = [df_d_sig, df_dbar_fake]
         filtrated_phi_0 = pd.concat(frames)
-        foldname = "./results_mc_sig_sig"
+        foldname = "/home/talazare/DDbar-GM/results/results_mc/results_mc_sig_fake"
         os.makedirs(foldname, exist_ok=True);
 
     if (fake_sig):
         frames = [df_d_fake, df_dbar_sig]
         filtrated_phi_0 = pd.concat(frames)
-        foldname = "./results_mc_sig_sig"
+        foldname = "/home/talazare/DDbar-GM/results/results_mc/results_mc_fake_sig"
         os.makedirs(foldname, exist_ok=True);
 
     if (fake_fake):
         frames = [df_d_fake, df_dbar_fake]
         filtrated_phi_0 = pd.concat(frames)
-        foldname = "./results_mc_sig_sig"
+        foldname = "/home/talazare/DDbar-GM/results/results_mc/results_mc_fake_fake"
         os.makedirs(foldname, exist_ok=True);
 
     if (full_data):
         filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
-    if (full_data == False):
-        def filtrate_df(df):
-            grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
-                  x: len(x) > 1)
-            new_df = grouped[grouped["delta_phi"] > 0]
-            return new_df
 
+    if (full_data == False):
         start = time.time()
         print("sorting values...")
         filtrated_phi_0.sort_values(["run_number", "ev_id"], inplace=True)
@@ -90,8 +98,6 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
 
     filtrated_phi_a = filtrated_phi[filtrated_phi["delta_phi"] > a_cut_lower]
     filtrated_phi_a = filtrated_phi_a[filtrated_phi_a["delta_phi"] < a_cut_upper]
-
-    print(filtrated_phi_a)
 
     pt_vec_max_a = filtrated_phi_a["pt_cand_max"]
     pt_vec_max_b = filtrated_phi_b["pt_cand_max"]
@@ -135,8 +141,8 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     mass_tot_min = filtrated_phi["inv_mass"].min()
     mass_tot_max = filtrated_phi["inv_mass"].max()
 
-    cYields.cd()
 
+    cYields_tot = TCanvas('cYields', 'The Fit Canvas')
     h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 50, mass_tot_min, mass_tot_max,
             50, mass_tot_max_min, mass_tot_max_max)
     t = 0
@@ -151,15 +157,16 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
         t += end-start
         est = (end - start)*len(inv_mass_tot)
     tot_entries = h_DDbar_mass_tot.GetEntries()
+    print("entries", tot_entries)
     h_DDbar_mass_tot.GetXaxis().SetTitleOffset(1.8)
     h_DDbar_mass_tot.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
     h_DDbar_mass_tot.GetYaxis().SetTitleOffset(1.8)
     h_DDbar_mass_tot.GetYaxis().SetTitle("inv_mass of D, GeV")
     h_DDbar_mass_tot.SetOption("lego2z")
     h_DDbar_mass_tot.Draw("same")
-    hfile.Write()
-    cYields.SaveAs("h_DDbar_tot.png")
+    cYields_tot.SaveAs("h_DDbar_tot.png")
 
+    cYields_a = TCanvas('cYields', 'The Fit Canvas')
     h_DDbar_mass_a = TH2F("Dbar-D plot region A" , "", 50, mass_min_a, mass_max_a,
             50, mass_tot_max_min, mass_tot_max_max)
     t = 0
@@ -180,8 +187,9 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     h_DDbar_mass_a.GetYaxis().SetTitle("inv_mass of D, GeV")
     h_DDbar_mass_a.SetOption("lego2z")
     h_DDbar_mass_a.Draw("")
-    cYields.SaveAs("h_DDbar_A.png")
+    cYields_a.SaveAs("h_DDbar_A.png")
 
+    cYields_b = TCanvas('cYields', 'The Fit Canvas')
     t = 0
     est = 0
     h_DDbar_mass_b = TH2F("Dbar-D plot region B" , "", 50, mass_min_b, mass_max_b,
@@ -201,9 +209,10 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     h_DDbar_mass_b.GetYaxis().SetTitle("inv_mass of D, GeV")
     h_DDbar_mass_b.SetOption("lego2z")
     h_DDbar_mass_b.Draw("")
-    cYields.SaveAs("h_DDbar_B.png")
+    cYields_b.SaveAs("h_DDbar_B.png")
 
-    cYields.SetLogy(False)
+    cYields_all= TCanvas('cYields', 'The Fit Canvas')
+    cYields_all.SetLogy(False)
     h_first_cand_mass = TH1F("inv_mass of the first cand" , "", 200,
             mass_min_a, mass_max_a)
     fill_hist(h_first_cand_mass, inv_mass_max_vec_a)
@@ -230,7 +239,7 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     leg.AddEntry(h_second_cand_mass_a, h_second_cand_mass_a.GetName(),"L")
     leg.AddEntry(h_second_cand_mass_b, h_second_cand_mass_b.GetName(),"L")
     leg.Draw("same")
-    cYields.SaveAs("h_inv_mass_cand.png")
+    cYields_all.SaveAs("h_inv_mass_cand.png")
 
     h_first_cand_pt = TH1F("pt of the first cand" , "", 200,
             pt_vec_rest_a.min(), pt_vec_rest_a.max())
@@ -258,7 +267,7 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     leg.AddEntry(h_second_cand_pt_a, h_second_cand_pt_a.GetName(),"L")
     leg.AddEntry(h_second_cand_pt_b, h_second_cand_pt_b.GetName(),"L")
     leg.Draw("same")
-    cYields.SaveAs("h_pt_cand_max_min.png")
+    cYields_all.SaveAs("h_pt_cand_max_min.png")
 
     h_first_cand_eta = TH1F("eta of the first cand" , "", 200,
             eta_max_vec_a.min(), eta_max_vec_a.max())
@@ -286,5 +295,6 @@ def main(sig_sig, sig_fake, fake_sig, fake_fake, full_data, df_d_sig, df_d_fake,
     leg.AddEntry(h_second_cand_eta_a, h_second_cand_eta_a.GetName(),"L")
     leg.AddEntry(h_second_cand_eta_b, h_second_cand_eta_b.GetName(),"L")
     leg.Draw("same")
-    cYields.SaveAs("h_eta_cand_max_min.png")
+    cYields_all.SaveAs("h_eta_cand_max_min.png")
 
+    hfile.Write()

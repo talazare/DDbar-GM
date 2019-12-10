@@ -5,7 +5,7 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 import os, sys
 
-from ROOT import TH1F, TH2F, TH3F, TF1, TF2, TCanvas, TFile
+from ROOT import TH1F, TH2F, TH3F, TF1, TF2, TF3, TCanvas, TFile, TMath
 from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
 from root_numpy import fill_hist
 from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar, openfile
@@ -48,6 +48,11 @@ a_cut_lower = 3*np.pi/4
 a_cut_upper = 5*np.pi/4
 b_cut_upper = 3*np.pi/2
 
+Nsig = 83420
+Nbkg = 5499
+Nsigbkg = 16616
+Nbkgsig = 13914
+
 start= time.time()
 
 dfreco = pickle.load(openfile("./filtrated_df_mc.pkl", "rb"))
@@ -64,7 +69,7 @@ print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
 
-foldname = "./results_mc"
+foldname = "/home/talazare/DDbar-GM/results/results_mc"
 os.makedirs(foldname, exist_ok=True);
 
 os.chdir(foldname)
@@ -116,32 +121,47 @@ h_invmass_dbarbkg.Draw()
 cYields.SaveAs("h_invmass_dbarbkg.png")
 
 main(True, False, False, False, False, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco)
-Nsig = tot_entries
+        df_dbar_fake, dfreco, False, Nsig)
+print("Nsig", Nsig)
 main(False, True, False, False, False, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco)
-Nsigbkg = tot_entries
+        df_dbar_fake, dfreco, False, Nsigbkg)
+print("Nsigbkg", Nsigbkg)
 main(False, False, True, False, False, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco)
-Nbkgsig = tot_entries
+        df_dbar_fake, dfreco, False, Nbkgsig)
+print("Nbkgsig", Nbkgsig)
 main(False, False, False, True, False, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco)
-Nbkg = tot_entries
-main(False, False, False, False, True, df_d_sig, df_d_fake, df_dbar_sig,
-        df_dbar_fake, dfreco)
-N_full = tot_entries
+        df_dbar_fake, dfreco, False, Nbkg)
+print("Nbkg", Nbkg)
+#main(False, False, False, False, True, df_d_sig, df_d_fake, df_dbar_sig,
+#        df_dbar_fake, dfreco, False, Nfull)
 
 def total_fit():
-#    fit_func = str(Nsig) + "*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+"+str(Nsigbkg)+"*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))+"+str(Nbkgsig)+"*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+"+str(Nbkg)+"*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))"
-    fit_func = "[12]*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+[13]*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))+[14]*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+[15]*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))"
+#    fit_func = str(Nsig) + "*[0]*exp(-pow((x[0]-[1]),2)/(2*[2]))*[3]*exp(-pow((x[1]-[4]),2)/(2*[5]))+"+str(Nsigbkg)+"*[0]*exp(-pow((x[0]-[1]),2)/(2*[2]))*[6]*exp(-pow((x[1]-[7]),2)/(2*[8]))+"+str(Nbkgsig)+"*[9]*exp(-pow((x[0]-[10]),2)/(2*[11]))*[3]*exp(-pow((x[1]-[4]),2)/(2*[5]))+"+str(Nbkg)+"*[9]*exp(-pow((x[0]-[10]),2)/(2*[11]))*[6]*exp(-pow((x[1]-[7]),2)/(2*[8]))"
+    fit_func = "[0]*exp(-pow((x[0]-[1]),2)/(2*[2]))*[3]*exp(-pow((x[1]-[4]),2)/(2*[5]))"
     total_fit = TF2("total_fit", fit_func, 1.64, 2.1, 1.64, 2.1)
+#    parameters = np.array([par1[0], par1[1], par1[2], par2[0], par2[1],
+#            par2[2], par3[0], par3[1], par3[2], par4[0], par4[1], par4[2]])
     parameters = np.array([par1[0], par1[1], par1[2], par2[0], par2[1],
-            par2[2], par3[0], par3[1], par3[2], par4[0], par4[1], par4[2],
-            Nsig, Nsigbkg, Nbkgsig, Nbkg])
+        par2[2]])
     total_fit.SetParameters(parameters)
     return total_fit
+#    fit_func = "[12]*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+[13]*[0]*exp(-pow((x-[1]),2)/(2*[2]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))+[14]*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[3]*exp(-pow((y-[4]),2)/(2*[5]))+[15]*[9]*exp(-pow((x-[10]),2)/(2*[11]))*[6]*exp(-pow((y-[7]),2)/(2*[8]))"
+#    total_fit = TF2("total_fit", fit_func, 1.64, 2.1, 1.64, 2.1)
+#    parameters = np.array([par1[0], par1[1], par1[2], par2[0], par2[1],
+#            par2[2], par3[0], par3[1], par3[2], par4[0], par4[1], par4[2],
+#            Nsig, Nsigbkg, Nbkgsig, Nbkg])
+#    total_fit.SetParameters(parameters)
+os.chdir(foldname)
+filtrated_phi = dfreco[dfreco["delta_phi"] > 0]
+inv_mass_tot = filtrated_phi["inv_mass"].tolist()
+inv_mass_tot_max = filtrated_phi["inv_cand_max"].tolist()
+mass_tot_max_min = filtrated_phi["inv_mass"].min()
+mass_tot_max_max = filtrated_phi["inv_mass"].max()
+mass_tot_min = filtrated_phi["inv_mass"].min()
+mass_tot_max = filtrated_phi["inv_mass"].max()
 
-
+hfile = TFile('post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
+cYields_fin = TCanvas('cYields', 'The Fit Canvas')
 h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 50, mass_tot_min, mass_tot_max,
         50, mass_tot_max_min, mass_tot_max_max)
 #DDbar_a = np.column_stack((inv_mass_vec_a, inv_mass_max_vec_a))
@@ -156,16 +176,16 @@ for i in range (0, len(inv_mass_tot)-1):
     end = time.time()
     t += end-start
     est = (end - start)*len(inv_mass_tot)
-if (full_data):
-    fit_fun = total_fit()
-    h_DDbar_mass_tot.Fit(fit_fun)
-    par = fit_fun.GetParameters()
+
+fit_fun = total_fit()
 h_DDbar_mass_tot.GetXaxis().SetTitleOffset(1.8)
 h_DDbar_mass_tot.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
 h_DDbar_mass_tot.GetYaxis().SetTitleOffset(1.8)
 h_DDbar_mass_tot.GetYaxis().SetTitle("inv_mass of D, GeV")
-h_DDbar_mass_tot.SetOption("lego2z")
-h_DDbar_mass_tot.Draw("same")
+h_DDbar_mass_tot.SetOption("surf")
+h_DDbar_mass_tot.Fit(fit_fun, "Q")
+h_DDbar_mass_tot.Draw()
+fit_fun.Draw("same")
 hfile.Write()
-cYields.SaveAs("h_DDbar_tot_fit.png")
+cYields_fin.SaveAs("h_DDbar_tot_fit.png")
 
