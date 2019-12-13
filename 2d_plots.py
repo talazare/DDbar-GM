@@ -24,6 +24,7 @@ a_cut_upper = 5*np.pi/4
 b_cut_upper = 3*np.pi/2
 
 def filtrate_df(df):
+    #exclude events with only one candidate
     grouped = df.groupby(["run_number", "ev_id"]).filter(lambda
           x: len(x) > 1)
     new_df = grouped[grouped["delta_phi"] > 0]
