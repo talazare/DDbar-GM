@@ -14,7 +14,7 @@ from parallel_calc import split_df, parallelize_df, num_cores, num_part
 from phi_compare import make_phi_compare
 from plots_2d import main
 from fitters import total_fit_py, total_fit, PDF_Fit2d, min_par_fit
-#from data_selection import create_bkg_df
+from data_selection import create_bkg_df
 from scipy.optimize import curve_fit
 from array import array
 import lz4.frame
@@ -24,9 +24,10 @@ binning = 50
 #debug = True
 debug = False
 
-reduced_data = True
-#reduced_data=False
+#reduced_data = True
+reduced_data=False
 
+bkg_create = True
 compare_phi_before = False
 compare_phi_after = False
 
@@ -40,7 +41,7 @@ b_cut_upper = 3*np.pi/2
 start= time.time()
 
 #loading montecarlo dataframe modified in checkddbar.py
-dfreco = pickle.load(openfile("./filtrated_df_mc.pkl", "rb"))
+dfreco = pickle.load(openfile("./data/filtrated_df_mc.pkl", "rb"))
 dfreco = dfreco.reset_index(drop = True)
 end = time.time()
 print("Data loaded in", end - start, "sec")
@@ -52,6 +53,17 @@ print("Size of data", dfreco.shape)
 
 print(dfreco.columns)
 
+
+print("dfreco before adding a bkg", dfreco.shape)
+if (bkg_create):
+    size = 5000000
+    bkg_df = create_bkg_df(size)
+    print("bkg_df!!!!!!!!!!!!!!!!!!!!!", bkg_df.shape)
+    frames = [bkg_df, dfreco]
+    dfreco = pd.concat(frames)
+    print("dfrecoooo!", dfreco.shape)
+
+print("dfreco after adding a bkg", dfreco.shape)
 foldname = "/home/talazare/DDbar-GM/results/results_mc"
 os.makedirs(foldname, exist_ok=True);
 
@@ -61,7 +73,9 @@ if compare_phi_before:
     make_phi_compare(dfreco)
 
 df_d = dfreco[dfreco["is_d"] == 1] # only with max_pt in the event (consider as d)
+print(df_d.shape)
 df_dbar = dfreco[dfreco["is_d"] == 0] # everything else (not d)
+print(df_dbar.shape)
 df_d_sig = df_d[df_d["ismcsignal"] == 1] # only d signal
 df_d_fake = df_d[df_d["ismcsignal"] == 0] # only d background
 df_dbar_sig = df_dbar[df_dbar["ismcsignal"] == 1] # only not d signal
@@ -73,8 +87,8 @@ if (reduced_data):
     rd_nd_sig = int(df_dbar_sig.shape[0]/6)
     rd_nd_fake = int(df_dbar_fake.shape[0]/4)
     print(df_d_sig.shape, rd_d_sig, rd_d_fake, rd_nd_sig, rd_nd_fake)
-    df_d_sig = df_d_sig[:rd_d_sig] # only d signal
-    df_dbar_sig = df_dbar_sig[:rd_nd_sig] # only not d signal
+    df_d_sig = df_d_sig.sample(n = rd_d_sig) # only d signal
+    df_dbar_sig = df_dbar_sig(n = rd_nd_sig) # only not d signal
 
 cYields = TCanvas('cYields', 'The Fit Canvas')
 fit_fun1 = TF1("fit_fun_1", "gaus", 1.64, 2.1)
@@ -210,8 +224,8 @@ hfile.Write()
 # do the same with real data
 dfreco = pickle.load(openfile("../../data/filtrated_df.pkl", "rb"))
 
-dfreco = dfreco[dfreco["delta_phi"] > a_cut_lower]
-dfreco = dfreco[dfreco["delta_phi"] < a_cut_upper]
+#dfreco = dfreco[dfreco["delta_phi"] > a_cut_lower]
+#dfreco = dfreco[dfreco["delta_phi"] < a_cut_upper]
 
 filtrated_phi = dfreco[dfreco["delta_phi"]>0]
 inv_mass_tot = filtrated_phi["inv_mass"].tolist()
