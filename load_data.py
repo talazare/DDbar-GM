@@ -172,6 +172,7 @@ def main(debug = True, real_data = False, plots = False):
     cYields.SaveAs("h_grouplen.png")
 
     hfile.Write()
+    return dfreco
 
 if __name__=="__main__":
     main()

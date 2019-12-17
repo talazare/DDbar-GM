@@ -9,8 +9,10 @@ from parallel_calc import split_df, parallelize_df, num_cores, num_part
 
 from load_data import main
 import time
-
-main(False, False, True)
+debug = False 
+real_data = True
+plots = False
+dfreco = main(debug, real_data, plots)
 
 #parallelized functions over the dataframe
 
@@ -64,7 +66,10 @@ for i in range (0,  split_const):
     timing += end - start
     dataframe.append(df)
 filtrated_phi_0 = pd.concat(dataframe)
-filtrated_phi_0.to_pickle("./filtrated_df_mc.pkl")
+if (real_data):
+    filtrated_phi_0.to_pickle("./results_test/filtrated_df.pkl")
+else:
+    filtrated_phi_0.to_pickle("./results_test/filtrated_df_mc.pkl")
 end2 = time.time()
 print(filtrated_phi_0)
 print("paralellized calculations are done in", end2 - start, "sec")

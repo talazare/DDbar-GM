@@ -5,3 +5,5 @@
 *.pkl
 ./results*
 ./data
+./sig_fake
+data_selection.py
