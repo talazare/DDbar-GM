@@ -1,0 +1,318 @@
+import numpy as np
+import pandas as pd
+import pickle
+import multiprocessing as mp
+import matplotlib.pyplot as plt
+import os, sys
+
+from ROOT import TH1F, TH2F, TH3F, TF1, TF2, TF3, TCanvas, TFile, TMath, TPad
+from ROOT import RooRealVar, RooArgList, RooArgSet, RooLinkedList, RooGenericPdf, RooDataSet
+from ROOT import kBlack, kBlue, kRed, kGreen, kMagenta, TLegend
+from root_numpy import fill_hist
+from machine_learning_hep.utilities import create_folder_struc, seldf_singlevar, openfile
+from multiprocessing import Pool, cpu_count
+from parallel_calc import split_df, parallelize_df, num_cores, num_part
+from phi_compare import make_phi_compare
+from plots_2d import main
+from fitters import total_fit_py, total_fit, PDF_Fit2d, min_par_fit, roo_pdf
+from data_selection import create_bkg_df
+from scipy.optimize import curve_fit
+from array import array
+import lz4.frame
+import time
+
+binning = 50
+#debug = True
+debug = False
+
+#reduced_data = True
+reduced_data=False
+
+#bkg_create = True
+bkg_create = False
+
+compare_phi_before = False
+compare_phi_after = False
+
+d_phi_cut = 0.
+
+b_cut_lower = np.pi/2
+a_cut_lower = 3*np.pi/4
+a_cut_upper = 5*np.pi/4
+b_cut_upper = 3*np.pi/2
+
+start= time.time()
+
+#loading montecarlo dataframe modified in checkddbar.py
+dfreco = pickle.load(openfile("./data/filtrated_df_mc.pkl", "rb"))
+dfreco = dfreco.reset_index(drop = True)
+end = time.time()
+print("Data loaded in", end - start, "sec")
+
+if(debug):
+    print("Debug mode: reduced data")
+    dfreco = dfreco[:10000]
+print("Size of data", dfreco.shape)
+
+print(dfreco.columns)
+
+
+print("dfreco before adding a bkg", dfreco.shape)
+if (bkg_create):
+    size = 5000000
+    bkg_df = create_bkg_df(size)
+    frames = [bkg_df, dfreco]
+    dfreco = pd.concat(frames)
+
+print("dfreco after adding a bkg", dfreco.shape)
+foldname = "/home/talazare/DDbar-GM/results/results_mc_reduced"
+os.makedirs(foldname, exist_ok=True);
+
+os.chdir(foldname)
+
+if compare_phi_before:
+    make_phi_compare(dfreco)
+
+df_d = dfreco[dfreco["is_d"] == 1] # only with max_pt in the event (consider as d)
+df_dbar = dfreco[dfreco["is_d"] == 0] # everything else (not d)
+df_d_sig = df_d[df_d["ismcsignal"] == 1] # only d signal
+df_d_fake = df_d[df_d["ismcsignal"] == 0] # only d background
+df_dbar_sig = df_dbar[df_dbar["ismcsignal"] == 1] # only not d signal
+df_dbar_fake = df_dbar[df_dbar["ismcsignal"] == 0] # only not d background
+
+if (reduced_data):
+    rd_d_sig = int(df_d_sig.shape[0]/6)
+    rd_d_fake = int(df_d_fake.shape[0]/4)
+    rd_nd_sig = int(df_dbar_sig.shape[0]/6)
+    rd_nd_fake = int(df_dbar_fake.shape[0]/4)
+    print(df_d_sig.shape, rd_d_sig, rd_d_fake, rd_nd_sig, rd_nd_fake)
+    df_d_sig = df_d_sig.sample(n = rd_d_sig) # only d signal
+#    df_d_fake = df_d_fake.sample(n = rd_d_fake) # only d signal
+    df_dbar_sig = df_dbar_sig.sample(n = rd_nd_sig) # only not d signal
+#    df_dbar_fake = df_dbar_fake.sample(n = rd_nd_fake) # only not d signal
+
+cYields = TCanvas('cYields', 'The Fit Canvas')
+fit_fun1 = TF1("fit_fun_1", "gaus", 1.64, 2.1)
+h_invmass_dsig = TH1F("invariant mass" , "", binning, df_d_sig.inv_mass.min(),
+        df_d_sig.inv_mass.max())
+fill_hist(h_invmass_dsig, df_d_sig.inv_mass)
+h_invmass_dsig.Fit(fit_fun1, "L")
+par1 = fit_fun1.GetParameters()
+h_invmass_dsig.Draw()
+cYields.SaveAs("h_invmass_dsig.png")
+
+fit_fun2 = TF1("fit_fun2", "pol2", 1.82, 1.92)
+h_invmass_dbkg = TH1F("invariant mass" , "", binning, df_d_fake.inv_mass.min(),
+        df_d_fake.inv_mass.max())
+fill_hist(h_invmass_dbkg, df_d_fake.inv_mass)
+h_invmass_dbkg.Fit(fit_fun2, "L")
+par2 = fit_fun2.GetParameters()
+h_invmass_dbkg.Draw()
+cYields.SaveAs("h_invmass_dbkg.png")
+
+fit_fun3 = TF1("fit_fun_3", "gaus", 1.64, 2.1)
+h_invmass_dbarsig = TH1F("invariant mass" , "", binning, df_dbar_sig.inv_mass.min(),
+        df_dbar_sig.inv_mass.max())
+fill_hist(h_invmass_dbarsig, df_dbar_sig.inv_mass)
+h_invmass_dbarsig.Fit(fit_fun3, "L")
+par3 = fit_fun3.GetParameters()
+h_invmass_dbarsig.Draw()
+cYields.SaveAs("h_invmass_dbarsig.png")
+
+fit_fun4 = TF1("fit_fun_4", "pol2", 1.64, 2.1)
+h_invmass_dbarbkg = TH1F("invariant mass" , "", binning, df_dbar_fake.inv_mass.min(),
+        df_dbar_fake.inv_mass.max())
+fill_hist(h_invmass_dbarbkg, df_dbar_fake.inv_mass)
+h_invmass_dbarbkg.Fit(fit_fun4, "L")
+par4 = fit_fun4.GetParameters()
+h_invmass_dbarbkg.Draw()
+cYields.SaveAs("h_invmass_dbarbkg.png")
+
+## make pairs for each event to extract Nsig, Nsigbkg, Nbkgsig, Nbkg, plot distributions
+## main(sig_sig, sig_fake, fake_sig, fake_fake, full data, df_d_sig, df_d_fake, df_dbar_sig, df_dbar_fake, dfreco, )
+
+Nsig = main(True, False, False, False, False, df_d_sig, df_d_fake, df_dbar_sig,
+        df_dbar_fake, dfreco, False)
+print("Nsig", Nsig)
+
+Nsigbkg = main(False, True, False, False, False, df_d_sig, df_d_fake, df_dbar_sig,
+        df_dbar_fake, dfreco, False)
+print("Nsigbkg", Nsigbkg)
+
+Nbkgsig = main(False, False, True, False, False, df_d_sig, df_d_fake, df_dbar_sig,
+        df_dbar_fake, dfreco, False)
+print("Nbkgsig", Nbkgsig)
+
+Nbkg = main(False, False, False, True, False, df_d_sig, df_d_fake, df_dbar_sig,
+        df_dbar_fake, dfreco, False)
+print("Nbkg", Nbkg)
+
+##main(False, False, False, False, True, df_d_sig, df_d_fake, df_dbar_sig,
+##        df_dbar_fake, dfreco, False)
+
+
+os.chdir(foldname)
+
+#make fit for the monte carlo data after getting all parameters
+
+filtrated_phi = dfreco[dfreco["delta_phi"]>0]
+inv_mass_tot = filtrated_phi["inv_mass"].tolist()
+inv_mass_tot_max = filtrated_phi["inv_cand_max"].tolist()
+mass_tot_max_min = filtrated_phi["inv_mass"].min()
+mass_tot_max_max = filtrated_phi["inv_mass"].max()
+mass_tot_min = filtrated_phi["inv_mass"].min()
+mass_tot_max = filtrated_phi["inv_mass"].max()
+
+# Make fit with python instruments
+
+params = [Nsig, Nsigbkg, Nbkgsig, Nbkg]
+
+#data = np.stack((np.array(inv_mass_tot), np.array(inv_mass_tot_max)))
+#print(data.shape)
+#py_fit = PDF_Fit2d(data, total_fit_py(par1[0], par3[0], par2[0], par4[0]),
+#        params=params)
+#print(py_fit.fit())
+#
+#fit_fun_py = total_fit(0.,0.,0.,0.)
+#par_py = array('d', py_fit.fit())
+#
+#print(par_py)
+#
+#fit_fun_py.SetParameters(par_py)
+
+print(params)
+#input()
+
+# Make plot and fit with root instruments
+
+#unbinned fit with roofit methods
+x = RooRealVar('x', 'mass_d_bar', mass_tot_min, mass_tot_max)
+y = RooRealVar('y', 'mass_d', mass_tot_max_min, mass_tot_max_max)
+param_1= RooRealVar('param_1','N_of_signal', Nsig )
+param_2= RooRealVar('param_2','N_of_signal_backg', Nsigbkg )
+param_3= RooRealVar('param_3','N_of_backg_signal', Nbkgsig )
+param_4= RooRealVar('param_4','N_of_backg', Nbkg )
+pdffunc =  roo_pdf(par1[0],par1[1], par1[2], par2[0], par2[1], par2[2], par3[0], par3[1], par3[2],par4[0], par4[1], par4[2])
+PDF_roo = RooGenericPdf("gpdf", pdffunc , RooArgList(x,y,param_1, param_2, param_3, param_4));
+
+#here it does 1d plot O_o????
+xframe= x.frame()
+PDF_roo.plotOn(xframe)
+xframe.Draw()
+
+#in progress to make tuple data
+ds = RooDataSet("ds","ds",RooArgSet(x,y), inv_mass_tot,inv_mass_tot_max )
+pdf.fitTo( ds, 'mh' );
+par = array('d', params)
+
+hfile = TFile('post_selection_histos_rd.root', 'RECREATE', 'ROOT file with histograms' )
+cYields_fin = TCanvas('cYields', 'The Fit Canvas')
+
+h_DDbar_mass_tot = TH2F("Dbar-D plot" , "", 50, mass_tot_min, mass_tot_max,
+        50, mass_tot_max_min, mass_tot_max_max)
+t = 0
+est = 0
+for i in range (0, len(inv_mass_tot)-1):
+    start = time.time()
+    if i%10000 == 0:
+        print("count is", i, "out of", len(inv_mass_tot), "time passed:", t,
+        "total time", est)
+    h_DDbar_mass_tot.Fill(inv_mass_tot[i], inv_mass_tot_max[i])
+    end = time.time()
+    t += end-start
+    est = (end - start)*len(inv_mass_tot)
+
+fit_fun = min_par_fit(par1[0], par1[1], par1[2], par2[0], par2[1], par2[2],
+        par3[0], par3[1], par3[2], par4[0], par4[1], par4[2])
+
+fit_fun.SetParameters(par)
+h_DDbar_mass_tot.Fit(fit_fun, "L")
+new_par = fit_fun.GetParameters()
+for i in range(4):
+    print(new_par[i])
+h_DDbar_mass_tot.GetXaxis().SetTitleOffset(1.8)
+h_DDbar_mass_tot.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
+h_DDbar_mass_tot.GetYaxis().SetTitleOffset(1.8)
+h_DDbar_mass_tot.GetYaxis().SetTitle("inv_mass of D, GeV")
+h_DDbar_mass_tot.SetOption("lego2 z")
+h_DDbar_mass_tot.Draw()
+cYields_fin.SaveAs("h_DDbar_tot_fit.png")
+h_res_mc  = TH3F("DDbar_residual_mc","", 50, 0, 50, 50, 0, 50, 200, -100, 100)
+for i in range (0, 50):
+    x=h_DDbar_mass_tot.GetXaxis().GetBinCenter(i)
+    print(x)
+    for j in range (0, 50):
+        y=h_DDbar_mass_tot.GetYaxis().GetBinCenter(j)
+        print(y)
+        res = h_DDbar_mass_tot.GetBinContent(i, j) - fit_fun.Eval(x,y)
+        print(h_DDbar_mass_tot.GetBinContent(i, j), fit_fun.Eval(x,y), res)
+        h_res_mc.Fill(i, j, res)
+cYields_res_mc = TCanvas('cYields_res_mc', 'The Fit Canvas')
+h_res_mc.SetOption("lego")
+h_res_mc.Draw()
+cYields_res_mc.SaveAs("h_DDbar_res_mc.png")
+cYields_fin.Update()
+hfile.Write()
+# do the same with real data
+dfreco = pickle.load(openfile("../../data/filtrated_df.pkl", "rb"))
+
+#dfreco = dfreco[dfreco["delta_phi"] > a_cut_lower]
+#dfreco = dfreco[dfreco["delta_phi"] < a_cut_upper]
+
+filtrated_phi = dfreco[dfreco["delta_phi"]>0]
+inv_mass_tot = filtrated_phi["inv_mass"].tolist()
+inv_mass_tot_max = filtrated_phi["inv_cand_max"].tolist()
+mass_tot_max_min = filtrated_phi["inv_mass"].min()
+mass_tot_max_max = filtrated_phi["inv_mass"].max()
+mass_tot_min = filtrated_phi["inv_mass"].min()
+mass_tot_max = filtrated_phi["inv_mass"].max()
+
+# Make fit with python instruments
+
+fit_fun = min_par_fit(par1[0], par1[1], par1[2], par2[0], par2[1], par2[2],
+        par3[0], par3[1], par3[2], par4[0], par4[1], par4[2])
+
+
+# Make plot and fit with root instruments
+hfile = TFile('post_selection_histos_mc.root', 'RECREATE', 'ROOT file with histograms' )
+cYields_fin = TCanvas('cYields', 'The Fit Canvas')
+h_DDbar_mass_rd = TH2F("Dbar-D plot real data" , "", 50, mass_tot_min, mass_tot_max,
+        50, mass_tot_max_min, mass_tot_max_max)
+t = 0
+est = 0
+for i in range (0, len(inv_mass_tot)-1):
+    start = time.time()
+    if i%10000 == 0:
+        print("count is", i, "out of", len(inv_mass_tot), "time passed:", t,
+        "total time", est)
+    h_DDbar_mass_rd.Fill(inv_mass_tot[i], inv_mass_tot_max[i])
+    end = time.time()
+    t += end-start
+    est = (end - start)*len(inv_mass_tot)
+fit_fun.SetParameters(par)
+h_DDbar_mass_rd.Fit(fit_fun, "L")
+new_par = fit_fun.GetParameters()
+for i in range(4):
+    print(new_par[i])
+h_DDbar_mass_rd.GetXaxis().SetTitleOffset(1.8)
+h_DDbar_mass_rd.GetXaxis().SetTitle("inv_mass of Dbar, GeV")
+h_DDbar_mass_rd.GetYaxis().SetTitleOffset(1.8)
+h_DDbar_mass_rd.GetYaxis().SetTitle("inv_mass of D, GeV")
+h_DDbar_mass_rd.SetOption("lego2 z")
+h_DDbar_mass_rd.Draw()
+cYields_fin.SaveAs("h_DDbar_rd_fit.png")
+h_res  = TH3F("DDbar_residual","", 50, 0, 50, 50, 0, 50, 200, -1000, 3000)
+for i in range (0, 50):
+    x=h_DDbar_mass_rd.GetXaxis().GetBinCenter(i)
+    print(x)
+    for j in range (0, 50):
+        y=h_DDbar_mass_rd.GetYaxis().GetBinCenter(j)
+        print(y)
+        res = h_DDbar_mass_rd.GetBinContent(i, j) - fit_fun.Eval(x,y)
+        print(h_DDbar_mass_rd.GetBinContent(i, j), fit_fun.Eval(x,y), res)
+        h_res.Fill(i, j, res)
+cYields_res = TCanvas('cYields_res', 'The Fit Canvas')
+h_res.SetOption("lego")
+h_res.Draw()
+cYields_res.SaveAs("h_DDbar_res.png")
+hfile.Write()
